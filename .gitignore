@@ -3,3 +3,6 @@ env/
 
 # Ignore all __pycache__ folders
 **/__pycache__/
+
+ws/app/api/database/db_ekamek.py
+ws/app/api/database/db.py
