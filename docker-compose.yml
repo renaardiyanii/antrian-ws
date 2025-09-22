@@ -1,0 +1,26 @@
+version: '3.3'
+services:
+  antrian_db:
+    image: postgres:12.1-alpine
+    ports:
+      - "6742:5432"
+    volumes:
+      - postgres_data_antrian1:/var/lib/postgresql/data/
+    environment:
+      POSTGRES_USER: antrianonline
+      POSTGRES_PASSWORD: 4ntr1an0nlin3RSOMHBKT2023!#
+      POSTGRES_DB: antrian
+      TZ: 'Asia/Jakarta'
+      PGTZ: 'Asia/Jakarta'
+  ws_antrian:
+    build: ./ws
+    command: uvicorn app.main:app --host 0.0.0.0 --reload
+    volumes:
+      - ./ws/:/app/
+    ports:
+      - 8000:8000
+    environment:
+      TZ: 'Asia/Jakarta'
+      DATABASE_URI: postgresql://antrianonline:4ntr1an0nlin3RSOMHBKT2023!#@localhost:6742/antrian
+volumes:
+  postgres_data_antrian1:
