@@ -2951,22 +2951,31 @@ async def dashboardantrianadmisi(db:Session=Depends(get_db)):
     result = await db_manager.listantrianbelumdiperiksaadmisinew(db = db)
     pasiendilayani = await db_manager.listantriandiperiksaadmisinew(db=db)
     pasien = []
+
+    # Process daftar antrian menunggu
     for j in result:
         pasien.append({
-                'nourut':j[1],
-                'nomorantrian':j[1],
+            'nourut': j[1],
+            'nomorantrian': j[1],
+            'status': j.status if hasattr(j, 'status') else 'menunggu',
+            'loket': j.loket if hasattr(j, 'loket') else None
         })
+
+    # Process antrian yang sedang dilayani
+    pasiendilayani_data = {}
+    if pasiendilayani is not None:
+        pasiendilayani_data = {
+            'nourut': pasiendilayani[1],
+            'nomorantrian': pasiendilayani[1],
+            'loket': pasiendilayani.loket if hasattr(pasiendilayani, 'loket') else None,
+            'status': pasiendilayani.status if hasattr(pasiendilayani, 'status') else 'dipanggil'
+        }
+
     if result is not None:
         res.append({
-            'pasiendilayani':{
-                'nourut':pasiendilayani[1] if pasiendilayani is not None else '',
-                'nomorantrian':pasiendilayani[1] if pasiendilayani is not None else '',
-            },
-            'pasien':pasien
+            'pasiendilayani': pasiendilayani_data,
+            'pasien': pasien
         })
-        
-
-    # print(cekDokterDanJadwal['response'])
 
     return res
 
@@ -3403,4 +3412,47 @@ async def gettaskid(
 #             'code':200
 #         }
 #     }
+
+@adminantrian.post('/v2/panggilantrian')
+async def panggilantrian(payload: models.PanggilAntrian, db: Session = Depends(get_db)):
+    """
+    Endpoint untuk memanggil antrian dengan informasi loket
+    """
+    try:
+        # Update data antrian dengan loket dan status dipanggil
+        updated = await db_manager.update_antrian_loket(
+            db=db,
+            antrian_id=payload.id,
+            loket=payload.loket,
+            status=payload.status
+        )
+
+        if updated > 0:
+            return {
+                'metadata': {
+                    'code': 200,
+                    'message': 'Antrian berhasil dipanggil'
+                },
+                'response': {
+                    'id': payload.id,
+                    'loket': payload.loket,
+                    'no_antrian': payload.no_antrian,
+                    'status': payload.status
+                }
+            }
+        else:
+            return {
+                'metadata': {
+                    'code': 400,
+                    'message': 'Gagal memperbarui data antrian'
+                }
+            }
+
+    except Exception as e:
+        return {
+            'metadata': {
+                'code': 500,
+                'message': f'Terjadi kesalahan: {str(e)}'
+            }
+        }
 

@@ -1033,13 +1033,13 @@ async def listantrianbelumdiperiksaadmisi(db:Session):
     and (flag is null or flag ='1') order by angkaantrean asc """).all()
 
 async def listantrianbelumdiperiksaadmisinew(db:Session):
-    return db.execute(f"""SELECT * FROM antrian_admisi WHERE TO_CHAR(tgl_kunjungan,'YYYY-MM-dd')='{datetime.datetime.today().strftime('%Y-%m-%d')}'
-    and flag = '1' ORDER BY no_antrian ASC """).all()
+    return db.execute(f"""SELECT *, loket, status FROM antrian_admisi WHERE TO_CHAR(tgl_kunjungan,'YYYY-MM-dd')='{datetime.datetime.today().strftime('%Y-%m-%d')}'
+    and (status IS NULL OR status = 'menunggu') ORDER BY no_antrian ASC """).all()
 
 
 async def listantriandiperiksaadmisinew(db:Session):
-    return db.execute(f"""SELECT * FROM antrian_admisi WHERE TO_CHAR(tgl_kunjungan,'YYYY-MM-dd')='{datetime.datetime.today().strftime('%Y-%m-%d')}'
-    and flag = '2' order by no_antrian DESC""").first()
+    return db.execute(f"""SELECT *, loket, status FROM antrian_admisi WHERE TO_CHAR(tgl_kunjungan,'YYYY-MM-dd')='{datetime.datetime.today().strftime('%Y-%m-%d')}'
+    and status = 'dipanggil' order by waktu_panggil DESC""").first()
 
 
 # deprecated
@@ -1129,3 +1129,21 @@ async def insert_taskid(db: Session, kodebooking: str, hit: str, request: str, r
     # Mengambil id hasil insert
     inserted_id = result.fetchone()[0]
     return inserted_id
+
+async def update_antrian_loket(db: Session, antrian_id: int, loket: str, status: str = "dipanggil"):
+    """
+    Update antrian dengan informasi loket dan status
+    """
+    try:
+        # Update query untuk mengubah loket dan status pada tabel antrian
+        query = (
+            f"UPDATE antrian_admisi "
+            f"SET loket = '{loket}', status = '{status}', waktu_panggil = NOW() "
+            f"WHERE id = {antrian_id}"
+        )
+        result = db.execute(query)
+        db.commit()
+        return result.rowcount
+    except Exception as e:
+        db.rollback()
+        raise e

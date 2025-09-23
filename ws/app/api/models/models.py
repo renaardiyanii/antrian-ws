@@ -240,3 +240,11 @@ class AmbilAntreanFarmasi(BaseModel):
     jenisresep: Optional[str] = None
     nomorantrean: Optional[int] = None
     keterangan: Optional[str] = None
+
+class PanggilAntrian(BaseModel):
+    id: int
+    loket: str
+    no_antrian: str
+    status: Optional[str] = "dipanggil"
+    class Config:
+        orm_mode = True
