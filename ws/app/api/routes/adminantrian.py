@@ -1805,7 +1805,7 @@ async def ambilantrianlamadebugprod(payload:models.AmbilantrianDebug,db: Session
         namaPasien = cekPasien[1]
     
     # check pernah daftar atau belum jika pernah maka bukan pasien baru
-    cekPasienBarulama = await db_manager.cekPasienbarulama(db= db,nomorkartu = payload.nomorkartu)
+    cekPasienBarulama = await db_manager_ekamek.cekPasienbarulama(db= db_ekamek,nomorkartu = payload.nomorkartu)
     if not cekPasienBarulama:
         payload.pasienbaru = '1'
 
@@ -3180,9 +3180,11 @@ async def antrianadmisi(
     today = datetime.date.today()
 
     # Query untuk mengambil semua antrean berdasarkan tanggal hari ini
+    # Mengecualikan antrian yang dibatalkan (flag != '3') dan yang sudah dilayani (status != 'telah_dilayani')
     antrian_list = db.query(generate.AntrianAdmisi)\
                      .filter(generate.AntrianAdmisi.tgl_kunjungan == today)\
                      .filter(generate.AntrianAdmisi.flag != '3')\
+                     .filter(generate.AntrianAdmisi.status != 'telah_dilayani')\
                      .order_by(asc(generate.AntrianAdmisi.no_antrian))\
                      .all()
 
@@ -3198,7 +3200,9 @@ async def antrianadmisi(
             'no_antrian': antrian.no_antrian,
             'tgl_kunjungan': antrian.tgl_kunjungan,
             'flag': antrian.flag,
-            'loket': antrian.loket
+            'loket': antrian.loket,
+            'status': antrian.status,  # Kolom status yang sudah ditambahkan
+            'waktu_panggil': antrian.waktu_panggil  # Kolom waktu panggil
         })
 
     # Response jika berhasil mendapatkan data antrean
@@ -3445,6 +3449,84 @@ async def panggilantrian(payload: models.PanggilAntrian, db: Session = Depends(g
                 'metadata': {
                     'code': 400,
                     'message': 'Gagal memperbarui data antrian'
+                }
+            }
+
+    except Exception as e:
+        return {
+            'metadata': {
+                'code': 500,
+                'message': f'Terjadi kesalahan: {str(e)}'
+            }
+        }
+
+@adminantrian.post('/v2/updatestatus')
+async def updatestatus(payload: models.UpdateStatusAntrian, db: Session = Depends(get_db)):
+    """
+    Endpoint untuk mengupdate status antrian (processed, completed)
+    """
+    try:
+        # Update status antrian
+        updated = await db_manager.update_status_antrian(
+            db=db,
+            antrian_id=payload.id,
+            status=payload.status
+        )
+
+        if updated > 0:
+            return {
+                'metadata': {
+                    'code': 200,
+                    'message': 'Status antrian berhasil diupdate'
+                },
+                'response': {
+                    'id': payload.id,
+                    'status': payload.status
+                }
+            }
+        else:
+            return {
+                'metadata': {
+                    'code': 400,
+                    'message': 'Gagal mengupdate status antrian'
+                }
+            }
+
+    except Exception as e:
+        return {
+            'metadata': {
+                'code': 500,
+                'message': f'Terjadi kesalahan: {str(e)}'
+            }
+        }
+
+@adminantrian.post('/v2/hapusantrian')
+async def hapusantrian(payload: models.HapusAntrian, db: Session = Depends(get_db)):
+    """
+    Endpoint untuk menghapus antrian dari database
+    """
+    try:
+        # Hapus antrian
+        deleted = await db_manager.hapus_antrian(
+            db=db,
+            antrian_id=payload.id
+        )
+
+        if deleted > 0:
+            return {
+                'metadata': {
+                    'code': 200,
+                    'message': 'Antrian berhasil dihapus'
+                },
+                'response': {
+                    'id': payload.id
+                }
+            }
+        else:
+            return {
+                'metadata': {
+                    'code': 400,
+                    'message': 'Gagal menghapus antrian atau antrian tidak ditemukan'
                 }
             }
 

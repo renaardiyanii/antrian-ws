@@ -913,3 +913,7 @@ async def carinamadokter_new_v2(db:Session,kodedokter:str,poli_bpjs:str):
 
     """
     return db.execute(url).first()
+
+async def cekPasienbarulama(db:Session,nomorkartu):
+    cekPasienbarulama = db.execute(f"SELECT * FROM daftar_ulang_irj where no_medrec = (select dp.no_medrec from data_pasien as dp WHERE dp.no_kartu = '{nomorkartu}');").first()
+    return cekPasienbarulama

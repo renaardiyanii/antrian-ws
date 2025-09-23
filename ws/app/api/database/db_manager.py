@@ -154,7 +154,7 @@ async def insert_antrian_poli_onsite_lama(db:Session,payload:models.AntrianPoliI
 
 async def insert_antrian_poli_onsite_lama_debug_prod(db:Session,payload:models.AntrianPoliIn,noantrian:int):
     db_antrian = generate.AntrianPoli(**payload.dict())
-    
+
     db.add(db_antrian)
     db.commit()
     db.refresh(db_antrian)
@@ -167,10 +167,10 @@ async def insert_antrian_poli_onsite_lama_debug_prod(db:Session,payload:models.A
     db.execute(f"UPDATE antrian_poli set angkaantrean={noantrian},nomorantrian='{nomorantrian}',kodebooking = '{kodebookingbaru }'where kodebooking = '{db_antrian.kodebooking}'")
     db.commit()
     db.refresh(db_antrian)
-    
+
     # db_antrian.angkaantrean = noantrian
     # db_antrian.nomorantrian = db_antrian.kodepoli + '-' + str(noantrian).zfill(3)
-    # db_antrian.kodebooking = '0311R001'+ db_antrian.tanggalperiksa.strftime('%Y%m%d') +db_antrian.kodepoli+str(noantrian).zfill(3) 
+    # db_antrian.kodebooking = '0311R001'+ db_antrian.tanggalperiksa.strftime('%Y%m%d') +db_antrian.kodepoli+str(noantrian).zfill(3)
 
     # disini daftar kan ke ws bpjs juga
     payloads = {
@@ -266,7 +266,33 @@ async def insert_antrian_poli_onsite_lama_debug_prod(db:Session,payload:models.A
 
     # Convert to milliseconds since the epoch
     timestamp_milliseconds = int(current_time.timestamp() * 1000)
+
+    # Check if pasienbaru is not None (meaning it's a new patient), then insert task IDs 1, 2, and 3
+    if db_antrian.pasienbaru is not None:
+        # Task ID 1: timestamp - 10 minutes
+        timestamp_task1 = timestamp_milliseconds - (10 * 60 * 1000)  # 10 minutes ago
+        payload_task1 = {
+            'kodebooking': db_antrian.kodebooking,
+            'taskid': '1',
+            'waktu': timestamp_task1
+        }
+        checkins_task1 = models.UpdateWaktu(**payload_task1)
+        task_id_1 = bpjs.post('antrean/updatewaktu',checkins_task1,'https://apijkn.bpjs-kesehatan.go.id/antreanrs/',True)
+        await insert_taskid(db,db_antrian.kodebooking,'Hit Task Id 1',json.dumps(payload_task1),json.dumps(task_id_1),"SUKSES" if task_id_1['metadata']['code'] == 200 else "GAGAL")
+
+        # Task ID 2: timestamp - 5 minutes
+        timestamp_task2 = timestamp_milliseconds - (5 * 60 * 1000)  # 5 minutes ago
+        payload_task2 = {
+            'kodebooking': db_antrian.kodebooking,
+            'taskid': '2',
+            'waktu': timestamp_task2
+        }
+        checkins_task2 = models.UpdateWaktu(**payload_task2)
+        task_id_2 = bpjs.post('antrean/updatewaktu',checkins_task2,'https://apijkn.bpjs-kesehatan.go.id/antreanrs/',True)
+        await insert_taskid(db,db_antrian.kodebooking,'Hit Task Id 2',json.dumps(payload_task2),json.dumps(task_id_2),"SUKSES" if task_id_2['metadata']['code'] == 200 else "GAGAL")
+
     # end
+    # Task ID 3: current timestamp
     payload = {
         'kodebooking': db_antrian.kodebooking,
         'taskid': '3',
@@ -1034,12 +1060,12 @@ async def listantrianbelumdiperiksaadmisi(db:Session):
 
 async def listantrianbelumdiperiksaadmisinew(db:Session):
     return db.execute(f"""SELECT *, loket, status FROM antrian_admisi WHERE TO_CHAR(tgl_kunjungan,'YYYY-MM-dd')='{datetime.datetime.today().strftime('%Y-%m-%d')}'
-    and (status IS NULL OR status = 'menunggu') ORDER BY no_antrian ASC """).all()
+    and (status IS NULL OR status = 'menunggu' OR status = 'processed') ORDER BY no_antrian ASC """).all()
 
 
 async def listantriandiperiksaadmisinew(db:Session):
     return db.execute(f"""SELECT *, loket, status FROM antrian_admisi WHERE TO_CHAR(tgl_kunjungan,'YYYY-MM-dd')='{datetime.datetime.today().strftime('%Y-%m-%d')}'
-    and status = 'dipanggil' order by waktu_panggil DESC""").first()
+    and (status = 'dipanggil' OR status = 'processed') order by waktu_panggil DESC, waktu_update DESC""").first()
 
 
 # deprecated
@@ -1108,6 +1134,7 @@ async def insertantrianadmisi(db: Session):
         no_antrian=no_antrian,
         tgl_kunjungan=today,
         flag='1',
+        status="menunggu",
         loket=None
     )
     
@@ -1141,6 +1168,38 @@ async def update_antrian_loket(db: Session, antrian_id: int, loket: str, status:
             f"SET loket = '{loket}', status = '{status}', waktu_panggil = NOW() "
             f"WHERE id = {antrian_id}"
         )
+        result = db.execute(query)
+        db.commit()
+        return result.rowcount
+    except Exception as e:
+        db.rollback()
+        raise e
+
+async def update_status_antrian(db: Session, antrian_id: int, status: str):
+    """
+    Update status antrian (processed, completed)
+    """
+    try:
+        # Update query untuk mengubah status pada tabel antrian
+        query = (
+            f"UPDATE antrian_admisi "
+            f"SET status = '{status}', waktu_update = NOW() "
+            f"WHERE id = {antrian_id}"
+        )
+        result = db.execute(query)
+        db.commit()
+        return result.rowcount
+    except Exception as e:
+        db.rollback()
+        raise e
+
+async def hapus_antrian(db: Session, antrian_id: int):
+    """
+    Hapus antrian dari database
+    """
+    try:
+        # Delete query untuk menghapus antrian
+        query = f"DELETE FROM antrian_admisi WHERE id = {antrian_id}"
         result = db.execute(query)
         db.commit()
         return result.rowcount

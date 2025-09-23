@@ -101,6 +101,8 @@ class AntrianAdmisi(Base):
     tgl_kunjungan = Column(Date)
     flag = Column(String(2))
     loket = Column(String(10))
+    status = Column(String(20))  # Tambahan kolom status untuk badge antrian
+    waktu_panggil = Column(DateTime)  # Tambahan kolom waktu panggil
 
 # antrian_poli = Table(
 #         'antrian_poli',

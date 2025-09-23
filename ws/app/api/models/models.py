@@ -248,3 +248,14 @@ class PanggilAntrian(BaseModel):
     status: Optional[str] = "dipanggil"
     class Config:
         orm_mode = True
+
+class UpdateStatusAntrian(BaseModel):
+    id: int
+    status: str  # processed, completed
+    class Config:
+        orm_mode = True
+
+class HapusAntrian(BaseModel):
+    id: int
+    class Config:
+        orm_mode = True
