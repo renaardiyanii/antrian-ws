@@ -3023,6 +3023,87 @@ async def dashboardantrian(poli:str,db:Session = Depends(get_db)):
     return res
 
 
+@adminantrian.get('/dashboardantrian/multi/{polies}')
+async def dashboardantrian_multi(polies: str, db: Session = Depends(get_db)):
+    """
+    Dashboard multi poli dengan format polies: "POLI1,POLI2,POLI3" max 5 poli
+    """
+    res = []
+    from datetime import timezone, timedelta
+
+    # Set the timezone to Asia/Jakarta
+    jakarta_timezone = timezone(timedelta(hours=7))  # UTC+7
+
+    # Parse poli list from comma separated string
+    poli_list = [poli.strip() for poli in polies.split(',')][:5]  # Max 5 poli
+
+    if not poli_list:
+        return validation.handleError('Format poli tidak valid')
+
+    # Data untuk menentukan grid besar (pemanggilan terakhir)
+    latest_call_time = None
+    latest_call_poli = None
+    latest_call_doctor = None
+
+    for poli in poli_list:
+        print(f"Processing poli: {poli}")
+
+        # ambil dokter yang ada di antrian saat ini untuk poli ini
+        cekDokterDanJadwal = service.cekjadwaldokter(poli, (datetime.datetime.today()).strftime('%Y-%m-%d'))
+        if cekDokterDanJadwal['metadata']['code'] != 200:
+            # Skip poli yang tidak ada dokter jadwal
+            continue
+
+        for i in cekDokterDanJadwal['response']:
+            result = await db_manager.listantrianbelumdiperiksa(db=db, poli=poli, dokter=i['kodedokter'])
+            pasiendilayani = await db_manager.listantriandiperiksa(db=db, poli=poli, dokter=i['kodedokter'])
+
+            pasien = []
+            for j in result:
+                pasien.append({
+                    'nourut': j[12],
+                    'nomorantrian': j[12],
+                    'nama': j[22],
+                    'norm': j[5]
+                })
+
+            # Cek waktu panggil terakhir untuk menentukan grid besar
+            if pasiendilayani and len(pasiendilayani) > 13:  # Pastikan ada waktu_panggil
+                current_call_time = pasiendilayani[13]  # Asumsi waktu_panggil di index 13
+                if current_call_time and (latest_call_time is None or current_call_time > latest_call_time):
+                    latest_call_time = current_call_time
+                    latest_call_poli = poli
+                    latest_call_doctor = i['namadokter']
+
+            if result is not None:
+                doctor_data = {
+                    'dokter': i['namadokter'],
+                    'poli': i['namasubspesialis'],
+                    'kodepoli': poli,
+                    'kodedokter': i['kodedokter'],
+                    'is_latest_call': False,  # Will be set later
+                    'pasiendilayani': {
+                        'nourut': pasiendilayani[12] if pasiendilayani is not None else '',
+                        'nomorantrian': pasiendilayani[12] if pasiendilayani is not None else '',
+                        'nama': pasiendilayani[22] if pasiendilayani is not None else '',
+                        'norm': pasiendilayani[5] if pasiendilayani is not None else '',
+                        'waktu_panggil': pasiendilayani[13] if pasiendilayani is not None and len(pasiendilayani) > 13 else None
+                    },
+                    'pasien': pasien,
+                    'total_antrian': len(pasien) + (1 if pasiendilayani else 0)
+                }
+                res.append(doctor_data)
+
+    # Set flag untuk grid terbesar (pemanggilan terakhir)
+    if latest_call_poli and latest_call_doctor:
+        for doctor in res:
+            if doctor['poli'] == latest_call_poli or doctor['dokter'] == latest_call_doctor:
+                doctor['is_latest_call'] = True
+                break
+
+    return res
+
+
 @adminantrian.post('/pasienbarunew')
 async def pasienbaru(payload:models.Pasienbarunew,db: Session = Depends(get_db),db_ekamek:SessionEkamek = Depends(get_db_ekamek)):
 
