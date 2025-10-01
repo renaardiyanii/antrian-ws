@@ -68,7 +68,7 @@ def referensipasienfinger(param:str,noidentitas:str):
 
 @ws_bpjs.post('/jadwaldokter/updatejadwaldokter')
 def updatejadwaldokter(payload:models.UpdateJadwalDokter):
-    return bpjs.post('/jadwaldokter/updatejadwaldokter',payload,'https://apijkn.bpjs-kesehatan.go.id/antreanrs/',True)
+    return bpjs.post('jadwaldokter/updatejadwaldokter',payload,'https://apijkn.bpjs-kesehatan.go.id/antreanrs/',True)
 
 
 @ws_bpjs.post('/antrean/add')
