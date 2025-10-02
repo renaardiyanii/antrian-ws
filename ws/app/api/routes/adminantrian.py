@@ -2968,7 +2968,8 @@ async def dashboardantrianadmisi(db:Session=Depends(get_db)):
             'nourut': pasiendilayani[1],
             'nomorantrian': pasiendilayani[1],
             'loket': pasiendilayani.loket if hasattr(pasiendilayani, 'loket') else None,
-            'status': pasiendilayani.status if hasattr(pasiendilayani, 'status') else 'dipanggil'
+            'status': pasiendilayani.status if hasattr(pasiendilayani, 'status') else 'dipanggil',
+            'waktu_panggil': str(pasiendilayani.waktu_panggil) if hasattr(pasiendilayani, 'waktu_panggil') and pasiendilayani.waktu_panggil else None
         }
 
     if result is not None:
