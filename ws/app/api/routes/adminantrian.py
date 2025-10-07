@@ -1431,15 +1431,10 @@ async def insert_daftar_ulang_new_jul_2025(payload,db_ekamek):
     # Set the timezone to Asia/Jakarta
     jakarta_timezone = timezone(timedelta(hours=7))  # UTC+7
 
-    # get detil peserta
-    # /Peserta/nokartu/{parameter 1}/tglSEP/{parameter 2}
-    # Mendapatkan tanggal saat ini
+
     now = datetime.datetime.now(jakarta_timezone)
-    # return now
-    # Mengubah ke format Y-m-d
     date_string = now.strftime("%Y-%m-%d")
     getdetilpeserta = bpjs_vclaim.get_vclaim('/Peserta/nokartu/'+payload['nomorkartu']+'/tglSEP/' + date_string)
-    # return getdetilpeserta
     kelasrawat = 'II'
     if getdetilpeserta['response']['peserta']['hakKelas']['kode'] == '2':
         kelasrawat = 'II'
@@ -1448,16 +1443,10 @@ async def insert_daftar_ulang_new_jul_2025(payload,db_ekamek):
     else:
         kelasrawat = 'I'
 
-    # get rujukan by no kartu
-    # BASE URL}/{Service Name}/Rujukan/Peserta/{parameter}
-    # {BASE URL}/{Service Name}/Rujukan/RS/Peserta/{parameter}
     getdetilrujukan = bpjs_vclaim.get_vclaim('/Rujukan/Peserta/'+payload['nomorkartu'])
-    # return getdetilrujukan
 
 
 
-    # get id poli by poli_bpjs
-    # cekpoliklinik = await db_manager_ekamek.caridatapoliklinik(db_ekamek,payload['kodepoli'])
     tujuan_kunj = '0'
     kd_penunjang = ''
     assesment_pel = ''
@@ -1490,36 +1479,43 @@ async def insert_daftar_ulang_new_jul_2025(payload,db_ekamek):
         nosurat_skdp_sep = payload['nomorreferensi']
         dpjp_suratkontrol = payload['kodedokter']
         catatan = f""
-        # force ganti ke 3
+      
+
+    if payload['jeniskunjungan'] == 4:
+        asalrujukan = '2'  # Default RS
+        tglrujukan = date_string
+        ppkrujukan = '0311R001'  # Kode RS Anda
+        namafaskes = 'RSUD SIJUNJUNG'  # Nama RS Anda
+        norujukan = payload['nomorreferensi']
+        diagnosa_rujukan_kode = 'Z51.1'  # Default diagnosa kontrol
+        diagnosa_rujukan_nama = 'Kemoterapi untuk neoplasma'
         payload['jeniskunjungan'] = 3
+    else:
+        asalrujukan = getdetilrujukan['response']['asalFaskes']
+        tglrujukan = getdetilrujukan['response']['rujukan']['tglKunjungan']
+        ppkrujukan = getdetilrujukan['response']['rujukan']['provPerujuk']['kode']
+        namafaskes = getdetilrujukan['response']['rujukan']['provPerujuk']['nama']
+        norujukan = getdetilrujukan['response']['rujukan']['noKunjungan']
+        diagnosa_rujukan_kode = getdetilrujukan['response']['rujukan']['diagnosa']['kode']
+        diagnosa_rujukan_nama = getdetilrujukan['response']['rujukan']['diagnosa']['nama']
 
 
-    # get id_dokter by dokter npjs
     cekdokter = await db_manager_ekamek.caridatadokter(db_ekamek,payload['kodedokter'])
-    # print(cekdokter)
-    # return {'ok'}
-    
-    # data_d
 
     no_medrecs = await db_manager_ekamek.carinomedrecberdasarnorm(db_ekamek,payload['norm'])
 
     idpoli = payload['id_poli']
     iddokter = str(cekdokter[0])
-
-    # cek jika poli DALAM2  dan dokter diana
-    # if idpoli == 'BR00' and iddokter == '40':
-    #     #pindahkan ke poli PENYAKIT DALAM
-    #     idpoli = 'BQ00'
     reqdata = {
         "reservasi": payload['kodebooking'],
         "no_medrec": no_medrecs[0],
         "xcreate": "ANTROL_ONSITE",
         "kelasrawat": getdetilpeserta['response']['peserta']['hakKelas']['kode'], #? dari data peserta
-        "asalrujukan": getdetilrujukan['response']['asalFaskes'], #? dari data rujukan
-        "tglrujukan": getdetilrujukan['response']['rujukan']['tglKunjungan'], #? dari data rujukan
-        "ppkrujukan": getdetilrujukan['response']['rujukan']['provPerujuk']['kode'], #? dari data rujukan
+        "asalrujukan": asalrujukan, #? dari data rujukan
+        "tglrujukan": tglrujukan, #? dari data rujukan
+        "ppkrujukan": ppkrujukan, #? dari data rujukan
         "jns_kunj": "LAMA", 
-        "namafaskes": getdetilrujukan['response']['rujukan']['provPerujuk']['nama'], #? dari data rujukan
+        "namafaskes": namafaskes, #? dari data rujukan
         "prb": '' if getdetilpeserta['response']['peserta']['informasi']['prolanisPRB'] is None else getdetilpeserta['response']['peserta']['informasi']['prolanisPRB'], #? dari data peserta
         "online": "0", 
         "noreservasi": payload['kodebooking'], #kodebooking
@@ -1527,11 +1523,11 @@ async def insert_daftar_ulang_new_jul_2025(payload,db_ekamek):
         "tgl_kunjungan": payload['tanggalperiksa'],
         "cara_bayar": "BPJS",
         "cara_dtg": "SENDIRI",
-        "cara_kunj": "RUJUKAN PUSKESMAS" if getdetilrujukan['response']['asalFaskes'] == '1' else "RUJUKAN RS", #dari data rujukan #"RUJUKAN PUSKESMAS","RUJUKAN RS"
+        "cara_kunj": "RUJUKAN PUSKESMAS" if asalrujukan == '1' else "RUJUKAN RS", #dari data rujukan #"RUJUKAN PUSKESMAS","RUJUKAN RS"
         "no_bpjs": payload['nomorkartu'],
         "id_kontraktor": "1",
         "no_sep": "", 
-        "no_rujukan": getdetilrujukan['response']['rujukan']['noKunjungan'], #dari data rujukan
+        "no_rujukan": norujukan, #dari data rujukan
         "tujuan_kunj": tujuan_kunj, #otomatis kan bisa
         "kd_penunjang": kd_penunjang, #otomatis kan bisa
         "assesment_pel": assesment_pel, #otomatis kan bisa
@@ -1547,7 +1543,7 @@ async def insert_daftar_ulang_new_jul_2025(payload,db_ekamek):
         "id_poli": idpoli + '~' + payload['kodepoli'], #ambil dari poliklinik
         "id_dokter": iddokter + '-' + payload['kodedokter'] + '-' + cekdokter[1],#ambil dari data_dokter
         "dokter_bpjs":  payload['kodedokter']  + "-" + cekdokter[1],
-        "diagnosa": getdetilrujukan['response']['rujukan']['diagnosa']['kode'] + "@" + getdetilrujukan['response']['rujukan']['diagnosa']['nama'],#ambil dari rujukan
+        "diagnosa": diagnosa_rujukan_kode + "@" + diagnosa_rujukan_nama,#ambil dari rujukan
         "id_diagnosa": "",
         "kelas_pasien": kelasrawat, #ambil dari rujukan
         "no_telp": "",
@@ -1782,7 +1778,6 @@ async def ambilantrianlamadebug(payload:models.AmbilantrianDebug,db: Session = D
 @adminantrian.post('/ambilantrianlamadebugprod')
 async def ambilantrianlamadebugprod(payload:models.AmbilantrianDebug,db: Session = Depends(get_db),db_ekamek:SessionEkamek = Depends(get_db_ekamek)):
     
-    # cek pasien dari db ekamek
     norm = 0
     cekPasien = await db_manager_ekamek.caridatapasien(db_ekamek,payload.nomorkartu)
     if not cekPasien: # tandanya pasien gaada
@@ -1804,7 +1799,6 @@ async def ambilantrianlamadebugprod(payload:models.AmbilantrianDebug,db: Session
         norm = cekPasien[2]
         namaPasien = cekPasien[1]
     
-    # check pernah daftar atau belum jika pernah maka bukan pasien baru
     cekPasienBarulama = await db_manager_ekamek.cekPasienbarulama(db= db_ekamek,nomorkartu = payload.nomorkartu)
     if not cekPasienBarulama:
         payload.pasienbaru = '1'
@@ -1818,9 +1812,6 @@ async def ambilantrianlamadebugprod(payload:models.AmbilantrianDebug,db: Session
     if not cekDokter:
         return validation.handleError('Kode Dokter Tidak sesuai')
         
-    # if cekDokter[2] is None or cekDokter[2] == '':
-    #     return validation.handleError('Kode Poli Tidak Ditemukan')
-
     cekPoli = payload.id_poli
     if not cekPoli:
         return validation.handleErrorAdmin('Poli Tidak Ditemukan')
@@ -1835,12 +1826,10 @@ async def ambilantrianlamadebugprod(payload:models.AmbilantrianDebug,db: Session
     
     resultJadwalDokter = {}
     for val in cekDokterDanJadwal['response']:
-        print(val)
         if val['kodedokter'] == int(payload.kodedokter):
             resultJadwalDokter = val
 
     if resultJadwalDokter == {}:
-        # return validation.handleErrorAdmin('Jadwal Dokter Tidak Ditemukan Pada Tanggal Tersebut!')
         return validation.handleErrorAdmin(f"Jadwal Dokter Tersebut Belum Tersedia,Silahkan Reschedule Tanggal dan Jam Praktek Lainnya")
 
     payload.namadokter = resultJadwalDokter['namadokter']
@@ -1848,7 +1837,6 @@ async def ambilantrianlamadebugprod(payload:models.AmbilantrianDebug,db: Session
     payload.nama = namaPasien
 
     cekTotalAntrian = await db_manager.cekTotalAntrian(db=db,kodehfis = payload.kodedokter,pertgl=payload.tanggalperiksa)
-    # estimasi waktu dilayani
     totalAntrian = int(cekTotalAntrian['count'])
     if totalAntrian == 0:
         totalAntrian = 1
@@ -1859,25 +1847,14 @@ async def ambilantrianlamadebugprod(payload:models.AmbilantrianDebug,db: Session
     validasiPeriksaHariIni = validation.validasiHariIni(payload.tanggalperiksa)
     if validasiPeriksaHariIni:
         splitJadwalJamMulaiSelesai = validation.validasiJadwalMelebihiJam(payload.jampraktek)
-        # if not splitJadwalJamMulaiSelesai:
-        #     return validation.handleErrorAdmin(f"Pendaftaran Ke Poli ({resultJadwalDokter['namasubspesialis']}) Sudah Tutup Jam {payload.jampraktek.split('-')[1]}")
-
-        # added feature
-        # cek jika pasien mendaftar selama pelayanan berlangsung ( misal jam 08.00 waktu mulai)
-        # dan pasien mendaftar di jam 09:00 maka waktu kira kira dilayani di jam 09: ditambah dengan menit total
-        # antrian yang akan dilayani
-        # if()
-        # jakarta_timezone = pytz.timezone('Asia/Jakarta')
+       
         now = datetime.datetime.now()
         dt_string = now.strftime("%Y-%m-%d %H:%M:%S")
         dt_string = datetime.datetime.strptime(dt_string, '%Y-%m-%d %H:%M:%S')
-        # print(dt_string)
-        # print('-----ini-----')
-        
+      
         # jika pasien masuuuk melebih jam praktek maka lanjutkan jam praktek + count berapa tersisa antrian
         if dt_string>waktuPelayananMulai:
             waktuPelayananMulai = dt_string
-        # end added
     
     estimasidilayani = waktuPelayananMulai + datetime.timedelta(minutes = waktuTotalAntrian)
     estimasidilayani = round(int(estimasidilayani.timestamp()) * 1000)
@@ -1888,31 +1865,25 @@ async def ambilantrianlamadebugprod(payload:models.AmbilantrianDebug,db: Session
     payload.kuotanonjkn = int(resultJadwalDokter['kapasitaspasien'])
 
     try:
-        # Attempt to convert the date string to a datetime object
         tanggalperiksa_date = datetime.datetime.strptime(payload.tanggalperiksa, '%Y-%m-%d')
     except ValueError:
-        # Handle the case where the date string is not a valid date
         return validation.handleErrorAdmin("Tanggal Periksa Tidak Valid")
-        # Handle this error as appropriate for your application
 
     polis = cekPoli
 
     noantrians = await db_manager_ekamek.nomorantriandebug(db_ekamek,polis,payload.tanggalperiksa,cekDokter[1])
     del payload.id_poli
     insert = await db_manager.insert_antrian_poli_onsite_lama_debug_prod(db= db,payload = payload,noantrian=noantrians[0])
-    # print("ASDASD")
-    # print(insert)
     if isinstance(insert, dict):
         return insert
 
-    # return False
 
     bodyreq = {
         'nomorkartu': payload.nomorkartu,
         'kodepoli': payload.kodepoli,
         'id_poli': polis,
         'namapoli':resultJadwalDokter['namasubspesialis'],
-        'jeniskunjungan': 3 if payload.jeniskunjungan == 4 else payload.jeniskunjungan,
+        'jeniskunjungan': payload.jeniskunjungan,
         'nomorreferensi':payload.nomorreferensi,
         'kodedokter':payload.kodedokter,
         'kodebooking':insert.kodebooking,
@@ -1923,54 +1894,6 @@ async def ambilantrianlamadebugprod(payload:models.AmbilantrianDebug,db: Session
     # return bodyreq
     reqdata = await insert_daftar_ulang_new_jul_2025(bodyreq,db_ekamek)
     await db_manager_ekamek.tambahhistoryantriandirect(db=db_ekamek,kodebooking=insert.kodebooking)
-
-    # update antrian online v.2
-    # 22/09/2024 17:19
-    # insert ke api -> antrol/insert_daftar_ulang_new POST 
-    # reqdata = {
-    #     "reservasi": insert.kodebooking,
-    #     "no_medrec": norm,
-    #     "xcreate": "ANTROL_ONSITE",
-    #     "kelasrawat": "1", #?
-    #     "asalrujukan": "1", #?
-    #     "tglrujukan": "2024-09-12", #?
-    #     "ppkrujukan": "03110502", #?
-    #     "jns_kunj": "LAMA", #?
-    #     "namafaskes": "GAMBOK", #? 
-    #     "prb": "PRB : DM, JT", #?
-    #     "online": "0", 
-    #     "noreservasi": "",
-    #     "noreg_asal_konsul": "",
-    #     "tgl_kunjungan": payload.tanggalperiksa,
-    #     "cara_bayar": "BPJS",
-    #     "cara_dtg": "SENDIRI",
-    #     "cara_kunj": "RUJUKAN PUSKESMAS", #"RUJUKAN PUSKESMAS","RUJUKAN RS"
-    #     "no_bpjs": payload.nomorkartu,
-    #     "id_kontraktor": "1",
-    #     "no_sep": "",
-    #     "no_rujukan": "031105020924P000004",
-    #     "tujuan_kunj": "0",
-    #     "kd_penunjang": "",
-    #     "assesment_pel": "",
-    #     "nosurat_skdp_sep": "",
-    #     "dpjp_suratkontrol": "",
-    #     "alber": "sakit",
-    #     "pasdatDg": "klg",
-    #     "jenis_kecelakaan": "",
-    #     "lokasi_kecelakaan": "",
-    #     "kll_tgl_kejadian": "2024-09-22",
-    #     "kll_ketkejadian": "",
-    #     "hubungan": "",
-    #     "id_poli": "BH00~MAT",
-    #     "id_dokter": "56-298316-dr. Putrigusti Admira, Sp. M",
-    #     "dokter_bpjs": "298316-Tenaga Medis 298316",
-    #     "diagnosa": "A18.5@Tuberculosis of eye",
-    #     "id_diagnosa": "",
-    #     "kelas_pasien": "II",
-    #     "no_telp": "1111111111111",
-    #     "catatan": "",
-    #     "cetak_kartu1": "130003"
-    # }
 
     return {
         'response':{
