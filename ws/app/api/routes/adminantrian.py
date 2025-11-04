@@ -1902,7 +1902,7 @@ async def ambilantrianlamadebugprod(payload:models.AmbilantrianDebug,db: Session
             'kodebooking':insert.kodebooking, #nomr + angkaantrean 
             'namapoli':resultJadwalDokter['namasubspesialis'], #nm_poli <- poliklinik
             'norm': norm, #nomr
-            'namadokter': resultJadwalDokter['namadokter'], #nm_dokter <- data_dokter
+            'namadokter': cekDokter[0], #nm_dokter <- data_dokter
             'estimasidilayani':estimasidilayani, # timestamp epoch tanggal_periksa: jam pelayanan awal  + (jumlah pasien * 15 menit)
             'sisakuotajkn': int(resultJadwalDokter['kapasitaspasien']) - int(totalAntrian), #50 - jml antrian bpjs poli 
             'kuotajkn':int(resultJadwalDokter['kapasitaspasien']), #nomr
